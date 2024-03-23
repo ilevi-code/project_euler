@@ -1,7 +1,7 @@
 use rug::{Assign, Float};
 use std::collections::BTreeMap;
 
-#[derive(Eq, PartialOrd, Ord, PartialEq, Debug)]
+#[derive(Eq, PartialOrd, Ord, PartialEq, Debug, Clone)]
 struct Actions {
     gives: i32,
     takes: i32,
@@ -30,35 +30,52 @@ impl Actions {
     }
 }
 
-fn delphi(cache: &mut BTreeMap<Actions, Float>, actions: Actions) -> Float {
+fn delphi_quick(cache: &mut BTreeMap<Actions, Float>, actions: Actions) -> Option<Float> {
     if actions.gives == 0 {
         // offering zeros, not letting the other player get anything
-        return Float::with_val(50, 1.0);
+        Some(Float::with_val(50, 1.0))
     } else if actions.takes == 0 {
         // offering always the whole amoung, doubling it each time
         let mut ret = Float::new(50);
         ret.assign(Float::i_exp(1, actions.gives));
-        return ret;
+        Some(ret)
     } else if let Some(factor) = cache.get(&actions) {
-        return factor.clone();
+        Some(factor.clone())
+    } else {
+        None
     }
+}
 
-    // calculate gain-factor based on possible action of the other player
-    let take_factor = delphi(cache, actions.take());
-    let give_factor = delphi(cache, actions.give());
-    // o is offer, G in gain-factor when opponent gives, T is gain-factor when opponent takes
-    // G(1+o) = T(1-o)
-    // G+Go = T-To
-    // (T+G)o = T-G
-    // o = (T-G)/(T+G)
-    let mut sub = Float::new(50);
-    let mut add = Float::new(50);
-    sub.assign(&take_factor - &give_factor);
-    add.assign(take_factor + &give_factor);
-    let offer = sub / add;
-    let gain: Float = (1.0 + offer) * give_factor;
-    cache.insert(actions, gain.clone());
-    gain
+fn delphi(cache: &mut BTreeMap<Actions, Float>, actions: Actions) -> Float {
+    let mut need_to_calc = vec![actions.clone()];
+
+    while let Some(current) = need_to_calc.pop() {
+        // calculate gain-factor based on possible action of the other player
+        let Some(take_factor) = delphi_quick(cache, current.take()) else {
+            need_to_calc.push(current.clone());
+            need_to_calc.push(current.take());
+            continue;
+        };
+        let Some(give_factor) = delphi_quick(cache, current.give()) else {
+            need_to_calc.push(current.clone());
+            need_to_calc.push(current.give());
+            continue;
+        };
+
+        // o is offer, G in gain-factor when opponent gives, T is gain-factor when opponent takes
+        // G(1+o) = T(1-o)
+        // G+Go = T-To
+        // (T+G)o = T-G
+        // o = (T-G)/(T+G)
+        let mut sub = Float::new(50);
+        let mut add = Float::new(50);
+        sub.assign(&take_factor - &give_factor);
+        add.assign(take_factor + &give_factor);
+        let offer = sub / add;
+        let gain: Float = (1.0 + offer) * give_factor;
+        cache.insert(current, gain.clone());
+    }
+    cache.get(&actions).unwrap().clone()
 }
 
 #[cfg(test)]
@@ -73,14 +90,19 @@ mod tests {
         super::delphi(&mut cache, actions).to_f64()
     }
 
+    fn delphi_quick(actions: Actions) -> f64 {
+        let mut cache = BTreeMap::new();
+        super::delphi_quick(&mut cache, actions).unwrap().to_f64()
+    }
+
     #[test]
     fn only_gives() {
-        assert_f64_near!(delphi(Actions { gives: 2, takes: 0 }), 4.0);
+        assert_f64_near!(delphi_quick(Actions { gives: 2, takes: 0 }), 4.0);
     }
 
     #[test]
     fn only_takes() {
-        assert_f64_near!(delphi(Actions { gives: 0, takes: 3 }), 1.0);
+        assert_f64_near!(delphi_quick(Actions { gives: 0, takes: 3 }), 1.0);
     }
 
     #[test]
