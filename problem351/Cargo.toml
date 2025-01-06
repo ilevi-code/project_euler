@@ -6,4 +6,6 @@ edition = "2021"
 [dependencies]
 itertools = "0.14.0"
 num-integer = "0.1.46"
+primes = "0.4.0"
 rayon = "1.10.0"
+slow_primes = "0.1.14"

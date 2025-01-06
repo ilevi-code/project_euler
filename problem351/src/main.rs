@@ -1,28 +1,55 @@
-use std::collections::VecDeque;
+/// Euler's totient function gives us the number of coprimes on n.
+/// We just need to sum them, and using mobius inversion is fast
+/// The inversion:
+/// https://en.wikipedia.org/wiki/Totient_summatory_function
+/// Mobius functions:
+/// https://mathworld.wolfram.com/MoebiusFunction.html
+///
+fn sieve_mobius(k: usize) -> Vec<i32> {
+    let mut mobius = vec![1; k];
+    let sieve = slow_primes::Primes::sieve(k);
 
-fn check_part(k: u32) -> u64 {
-    let mut v: VecDeque<(u32, u32)> = VecDeque::new();
-    v.push_back((2, 1));
-    v.push_back((3, 1));
-    let mut hidden = 0;
-    while v.len() != 0 {
-        let (m, n) = v.pop_front().unwrap();
-        let f = ((k / (n + m)) * 2 - 2) as u64;
-        hidden += f;
-        let generated = [(2 * m - n, m), (2 * m + n, m), (m + 2 * n, n)];
-        for (m, n) in generated {
-            if m + n <= k / 2 {
-                v.push_back((m, n));
-            }
+    for p in sieve.primes() {
+        for i in (p..k).step_by(p) {
+            mobius[i] = 0 - mobius[i];
+        }
+        // println!("{p}");
+    }
+    for prime in sieve.primes() {
+        let prod = prime * prime;
+        for i in (prod..k).step_by(prod) {
+            mobius[i] = 0;
         }
     }
-    hidden += (k - 1) as u64;
-    hidden += ((k - 2) / 2) as u64;
-    hidden
+    mobius
+}
+
+fn sum_mobious_once(n: i64, k: i64, mobius_value: i64) -> i64 {
+    mobius_value * (n / k) * (1 + n / k)
+}
+
+fn check_part(n: u64) -> i64 {
+    let triangle = (n * (n + 1) / 2) as i64;
+    triangle
+        - sieve_mobius((n + 1) as usize)
+            .iter()
+            .enumerate()
+            .skip(1)
+            .map(|(k, mobius_value)| sum_mobious_once(n as i64, k as i64, *mobius_value as i64))
+            .sum::<i64>()
+            / 2
 }
 
 fn main() {
-    println!("{}", check_part(100_000) * 6);
+    println!("{}", check_part(100_000_000) * 6);
+}
+
+#[test]
+fn check_mobius() {
+    assert_eq!(
+        sieve_mobius(20),
+        [1, 1, -1, -1, 0, -1, 1, -1, 0, 0, 1, -1, 0, -1, 1, 1, 0, -1, 0, -1]
+    );
 }
 
 #[test]
